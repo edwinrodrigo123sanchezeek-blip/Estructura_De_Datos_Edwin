@@ -1,0 +1,39 @@
+import random
+import time
+
+# Cantidad de alumnos
+alumnos = 500
+
+# Materias
+materias = [
+    "Matemáticas",
+    "Programación",
+    "Física",
+    "Inglés",
+    "Cálculo",
+    "Estructura de Datos"
+]
+
+# Crear matriz de 500 alumnos x 6 materias
+matriz = [
+    [random.randint(0, 100) for j in range(len(materias))]
+    for i in range(alumnos)
+]
+
+# Alumno y materia a buscar
+alumno = 321
+materia = 5
+
+# Medir el tiempo de búsqueda
+inicio = time.perf_counter()
+
+# Buscar la calificación
+calificacion = matriz[alumno - 1][materia - 1]
+
+fin = time.perf_counter()
+
+# Mostrar resultados
+print("Alumno:", alumno)
+print("Materia:", materias[materia - 1])
+print("Calificación:", calificacion)
+print("Tiempo de búsqueda:", fin - inicio, "segundos")
