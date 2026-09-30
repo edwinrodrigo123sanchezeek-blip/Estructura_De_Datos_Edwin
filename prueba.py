@@ -108,7 +108,6 @@ class App(tk.Tk):
         b.pack(**pk)
         return b
 
-    # ---- 1. Inicio
     def p_inicio(self):
         tk.Label(self.content, text="Control Financiero\nAgrícola", bg=FONDO,
                  fg="#173d31", justify="left",
@@ -203,7 +202,6 @@ class App(tk.Tk):
         self.boton(bar, "✕  Cancelar", lambda: self.ir("mov" if mov else "inicio"),
                    color="white", fg="#333", side="left", padx=10)
 
-    # ---- 3. Registrar gasto (también sirve para editar)
     def p_gasto(self, mov=None):
         self.titulo("Editar gasto" if mov else "Registrar gasto", "➖")
         f = tk.Frame(self.content, bg=FONDO)
@@ -263,7 +261,7 @@ class App(tk.Tk):
         self.boton(bar, "✕  Cancelar", lambda: self.ir("mov" if mov else "inicio"),
                    color="white", fg="#333", side="left", padx=10)
     # Aque va la PARTE 2
-    # Debe reemplazar los 6 métodos de abajo, respetando sus nombres.
+    # Debe reemplazar los 6 métodos de abajo, respetando sus nombres porfis.
     # Pueden usar: conn(), money(), iso_a_fecha(), self.titulo(), self.boton(),
     # self.ir(), los colores (VERDE, ROJO, ROSA, MENTA...) y self.content.
 
