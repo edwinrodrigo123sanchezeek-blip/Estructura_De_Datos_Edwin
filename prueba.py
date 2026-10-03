@@ -260,24 +260,274 @@ class App(tk.Tk):
         self.boton(bar, "💾  Guardar", guardar, side="left")
         self.boton(bar, "✕  Cancelar", lambda: self.ir("mov" if mov else "inicio"),
                    color="white", fg="#333", side="left", padx=10)
-    # Aque va la PARTE 2
-    # Debe reemplazar los 6 métodos de abajo, respetando sus nombres porfis.
-    # Pueden usar: conn(), money(), iso_a_fecha(), self.titulo(), self.boton(),
-    # self.ir(), los colores (VERDE, ROJO, ROSA, MENTA...) y self.content.
-
-    def _pendiente(self, texto):
-        self.titulo(texto)
-        tk.Label(self.content, text="🚧 Pendiente: esta pantalla la hará la Parte 2.",
-                 bg=FONDO, fg="#777", font=("Segoe UI", 12)).pack(anchor="w", padx=34)
-
+    # ------------------------------------------------------------------
+    # PARTE 2: Movimientos, Detalle y Balance
+    # ------------------------------------------------------------------
     def p_mov(self):
-        self._pendiente("Movimientos")
+        """Tabla de movimientos con buscador, filtro de tipo y botones de acción."""
+        import unicodedata
+
+        def plano(s):
+            # minúsculas y sin acentos: así "maiz" encuentra "Maíz"
+            s = unicodedata.normalize("NFD", str(s or ""))
+            return "".join(ch for ch in s if unicodedata.category(ch) != "Mn").lower()
+
+        self.titulo("Movimientos", "☰")
+
+        # --- barra superior: buscador, filtro de tipo y accesos rápidos ---
+        barra = tk.Frame(self.content, bg=FONDO)
+        barra.pack(fill="x", padx=28, pady=(0, 10))
+        tk.Label(barra, text="🔍", bg=FONDO).pack(side="left")
+        q = tk.StringVar()
+        ttk.Entry(barra, textvariable=q, width=28).pack(side="left", padx=(4, 14))
+        tipo = tk.StringVar(value="Todos")
+        ttk.Combobox(barra, textvariable=tipo, values=["Todos", "Ingreso", "Gasto"],
+                     state="readonly", width=10).pack(side="left")
+        self.boton(barra, "➖  Gasto", lambda: self.ir("gasto"),
+                   color=ROSA, fg="#7a2a2a", side="right", padx=(8, 0))
+        self.boton(barra, "➕  Ingreso", lambda: self.ir("ingreso"),
+                   color=MENTA, fg="#1d5a3a", side="right")
+
+        # --- pie: resumen de lo que se ve + botones de acción (va ANTES de la tabla
+        #     para que la tabla ocupe el espacio sobrante) ---
+        pie = tk.Frame(self.content, bg=FONDO)
+        pie.pack(side="bottom", fill="x", padx=28, pady=(8, 16))
+        resumen = tk.Label(pie, bg=FONDO, fg="#444", anchor="w", font=("Segoe UI", 10))
+        resumen.pack(side="left")
+
+        # --- tabla ---
+        marco = tk.Frame(self.content, bg=FONDO)
+        marco.pack(fill="both", expand=True, padx=28)
+        tabla = ttk.Treeview(marco, columns=("fecha", "tipo", "concepto", "cultivo", "total"),
+                             show="headings", selectmode="browse")
+        for col, txt, ancho, anc in [("fecha", "Fecha", 95, "center"), ("tipo", "Tipo", 80, "center"),
+                                     ("concepto", "Concepto", 230, "w"), ("cultivo", "Cultivo", 110, "w"),
+                                     ("total", "Total", 110, "e")]:
+            tabla.heading(col, text=txt)
+            tabla.column(col, width=ancho, anchor=anc)
+        sb = ttk.Scrollbar(marco, orient="vertical", command=tabla.yview)
+        tabla.configure(yscrollcommand=sb.set)
+        tabla.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        ttk.Style(self).map("Treeview", background=[("selected", VERDE)],
+                            foreground=[("selected", "white")])
+        tabla.tag_configure("Ingreso", background=MENTA)   # ingresos en menta
+        tabla.tag_configure("Gasto", background=ROSA)      # gastos en rosa
+
+        def cargar(*_):
+            tabla.delete(*tabla.get_children())
+            buscado, filtro = plano(q.get().strip()), tipo.get()
+            n = ingresos = gastos = 0
+            with conn() as c:
+                filas = c.execute("SELECT * FROM movimientos ORDER BY fecha DESC, id DESC").fetchall()
+            for m in filas:
+                if filtro != "Todos" and m["tipo"] != filtro:
+                    continue
+                fecha = iso_a_fecha(m["fecha"])
+                if buscado and buscado not in plano(
+                        f"{fecha} {m['tipo']} {m['concepto']} {m['cultivo'] or ''} {m['descripcion'] or ''}"):
+                    continue
+                es_ing = m["tipo"] == "Ingreso"
+                tabla.insert("", "end", iid=str(m["id"]), tags=(m["tipo"],),
+                             values=(fecha, m["tipo"], m["concepto"], m["cultivo"] or "—",
+                                     ("+ " if es_ing else "− ") + money(m["total"])))
+                n += 1
+                if es_ing:
+                    ingresos += m["total"]
+                else:
+                    gastos += m["total"]
+            resumen.config(text=f"{n} movimiento(s)   ·   Ingresos {money(round(ingresos, 2))}"
+                                f"   ·   Gastos {money(round(gastos, 2))}")
+
+        def elegido():
+            sel = tabla.selection()
+            if not sel:
+                messagebox.showinfo("Movimientos", "Primero selecciona un movimiento de la tabla.")
+                return None
+            return int(sel[0])
+
+        def ver():
+            mid = elegido()
+            if mid is not None:
+                self.ir("detalle", mid=mid)
+
+        def editar():
+            mid = elegido()
+            if mid is not None:
+                self.editar(mid)
+
+        def eliminar():
+            mid = elegido()
+            if mid is not None:
+                self.eliminar(mid)
+
+        self.boton(pie, "🗑  Eliminar", eliminar, color=ROJO, side="right", padx=(8, 0))
+        self.boton(pie, "✏  Editar", editar, color="white", fg="#333", side="right", padx=(8, 0))
+        self.boton(pie, "👁  Ver detalle", ver, side="right")
+
+        def doble_clic(e):
+            if tabla.identify_row(e.y):      # ignora el doble clic sobre el encabezado
+                ver()
+        tabla.bind("<Double-1>", doble_clic)
+        tabla.bind("<Return>", lambda e: ver())
+
+        q.trace_add("write", cargar)         # se filtra mientras se escribe
+        tipo.trace_add("write", cargar)      # y al cambiar el tipo
+        cargar()
 
     def p_detalle(self, mid):
-        self._pendiente("Detalle del movimiento")
+        """Vista detallada de un movimiento según su ID."""
+        m = self.obtener(mid)
+        if m is None:
+            messagebox.showwarning("Detalle", "Ese movimiento ya no existe.")
+            return self.ir("mov")
+        es_ing = m["tipo"] == "Ingreso"
+        fondo = MENTA if es_ing else ROSA
+        acento = VERDE if es_ing else "#a33a3a"
+
+        self.titulo("Detalle del movimiento", "🔎")
+        tarjeta = tk.Frame(self.content, bg=fondo, padx=28, pady=20)
+        tarjeta.pack(anchor="w", padx=34, pady=(0, 14))
+        tk.Label(tarjeta, text=m["tipo"].upper(), bg=fondo, fg=acento,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        tk.Label(tarjeta, text=("+ " if es_ing else "− ") + money(m["total"]), bg=fondo, fg=acento,
+                 font=("Segoe UI", 28, "bold")).pack(anchor="w", pady=(0, 10))
+
+        datos = [("Fecha", iso_a_fecha(m["fecha"])), ("Concepto", m["concepto"]),
+                 ("Cultivo", m["cultivo"] or "—")]
+        if m["cantidad"] is not None:        # solo los ingresos guardan cantidad y precio
+            datos.append(("Cantidad", f"{m['cantidad']:g} {m['unidad'] or ''}".strip()))
+            datos.append(("Precio por unidad", money(m["precio"] or 0)))
+        datos.append(("Descripción", m["descripcion"] or "Sin descripción."))
+
+        rejilla = tk.Frame(tarjeta, bg=fondo)
+        rejilla.pack(anchor="w")
+        for r, (campo, valor) in enumerate(datos):
+            tk.Label(rejilla, text=campo, bg=fondo, fg="#444", width=17, anchor="nw",
+                     font=("Segoe UI", 10, "bold")).grid(row=r, column=0, sticky="nw", pady=4)
+            tk.Label(rejilla, text=valor, bg=fondo, fg="#222", anchor="w", justify="left",
+                     wraplength=420, font=("Segoe UI", 10)).grid(row=r, column=1, sticky="w", pady=4)
+
+        bar = tk.Frame(self.content, bg=FONDO)
+        bar.pack(anchor="w", padx=34, pady=6)
+        self.boton(bar, "✏  Editar", lambda: self.editar(mid), side="left")
+        self.boton(bar, "🗑  Eliminar", lambda: self.eliminar(mid), color=ROJO, side="left", padx=10)
+        self.boton(bar, "←  Volver", lambda: self.ir("mov"), color="white", fg="#333", side="left")
 
     def p_balance(self):
-        self._pendiente("Balance")
+        """Totales de dinero, resumen por cultivo y gráfica de barras en un tk.Canvas."""
+        self.titulo("Balance", "📊")
+
+        # --- datos: suma de cada cultivo y tipo (los gastos sin cultivo van a "General") ---
+        with conn() as c:
+            filas = c.execute("""SELECT COALESCE(NULLIF(TRIM(cultivo), ''), 'General') AS cultivo,
+                                        tipo, SUM(total) AS suma
+                                 FROM movimientos GROUP BY 1, 2""").fetchall()
+        datos = {}
+        for f in filas:
+            datos.setdefault(f["cultivo"], {"Ingreso": 0.0, "Gasto": 0.0})[f["tipo"]] = round(f["suma"], 2)
+        ingresos = round(sum(d["Ingreso"] for d in datos.values()), 2)
+        gastos = round(sum(d["Gasto"] for d in datos.values()), 2)
+        balance = round(ingresos - gastos, 2)
+
+        def con_signo(x):
+            return ("-" if x < 0 else "") + money(abs(x))
+
+        # --- tarjetas con los totales ---
+        tarjetas = tk.Frame(self.content, bg=FONDO)
+        tarjetas.pack(anchor="w", padx=28, pady=(0, 12))
+        color_bal = VERDE if balance >= 0 else "#a33a3a"
+        for i, (txt, valor, fondo, fg) in enumerate([
+                ("Ingresos", money(ingresos), MENTA, VERDE),
+                ("Gastos", money(gastos), ROSA, "#a33a3a"),
+                ("Ganancia" if balance >= 0 else "Pérdida", con_signo(balance), "#d3e6f5", color_bal)]):
+            t = tk.Frame(tarjetas, bg=fondo, padx=22, pady=12)
+            t.grid(row=0, column=i, padx=(0, 12))
+            tk.Label(t, text=txt, bg=fondo, fg="#444", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+            tk.Label(t, text=valor, bg=fondo, fg=fg, font=("Segoe UI", 18, "bold")).pack(anchor="w")
+
+        # --- parte baja: tabla por cultivo (izquierda) y gráfica (derecha) ---
+        abajo = tk.Frame(self.content, bg=FONDO)
+        abajo.pack(fill="both", expand=True, padx=28, pady=(0, 16))
+
+        izq = tk.Frame(abajo, bg=FONDO)
+        izq.pack(side="left", fill="y")
+        tk.Label(izq, text="Resumen por cultivo", bg=FONDO, fg="#173d31",
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 6))
+        tabla = ttk.Treeview(izq, columns=("cultivo", "ing", "gas", "bal"), show="headings",
+                             height=8, selectmode="none")
+        for col, txt, ancho, anc in [("cultivo", "Cultivo", 85, "w"), ("ing", "Ingresos", 85, "e"),
+                                     ("gas", "Gastos", 85, "e"), ("bal", "Balance", 90, "e")]:
+            tabla.heading(col, text=txt)
+            tabla.column(col, width=ancho, anchor=anc)
+        tabla.tag_configure("pos", foreground=VERDE)
+        tabla.tag_configure("neg", foreground="#a33a3a")
+        tabla.tag_configure("total", background=VERDE_CLARO, font=("Segoe UI", 10, "bold"))
+        for nombre in sorted(datos):
+            ing, gas = datos[nombre]["Ingreso"], datos[nombre]["Gasto"]
+            tabla.insert("", "end", values=(nombre, money(ing), money(gas), con_signo(round(ing - gas, 2))),
+                         tags=("pos" if ing >= gas else "neg",))
+        if datos:
+            tabla.insert("", "end", values=("TOTAL", money(ingresos), money(gastos), con_signo(balance)),
+                         tags=("total",))
+        tabla.pack()
+
+        der = tk.Frame(abajo, bg=FONDO)
+        der.pack(side="left", fill="both", expand=True, padx=(18, 0))
+        tk.Label(der, text="Ingresos vs gastos por cultivo", bg=FONDO, fg="#173d31",
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 6))
+        cv = tk.Canvas(der, bg="white", highlightthickness=1, highlightbackground=VERDE_CLARO)
+        cv.pack(fill="both", expand=True)
+
+        def corto(v):
+            if v >= 1e6:
+                return f"{v / 1e6:g}M"
+            return f"{v / 1e3:g}k" if v >= 1e3 else f"{v:g}"
+
+        def dibujar(_e=None):
+            cv.delete("all")
+            w, h = cv.winfo_width(), cv.winfo_height()
+            if w < 60 or h < 60:             # el canvas todavía no tiene tamaño real
+                return
+            if not datos:
+                cv.create_text(w / 2, h / 2, text="Sin movimientos todavía", fill="#777",
+                               font=("Segoe UI", 11))
+                return
+            izq_m, der_m, arr_m, aba_m = 48, 12, 30, 38
+            alto, ancho = h - arr_m - aba_m, w - izq_m - der_m
+            maximo = max(max(d.values()) for d in datos.values()) or 1
+            magnitud = 10 ** (len(str(int(maximo))) - 1)
+            tope = next(k * magnitud for k in (1, 2, 4, 6, 8, 10) if k * magnitud >= maximo)
+
+            for i in range(5):               # líneas guía y números del eje Y
+                y = h - aba_m - alto * i / 4
+                cv.create_line(izq_m, y, w - der_m, y, fill="#e3e8e4")
+                cv.create_text(izq_m - 6, y, text=corto(tope * i / 4), anchor="e",
+                               fill="#666", font=("Segoe UI", 8))
+
+            nombres = sorted(datos)
+            grupo = ancho / len(nombres)
+            barra = min(26, grupo * 0.34)
+            for i, nombre in enumerate(nombres):
+                x0 = izq_m + i * grupo + (grupo - 2 * barra - 3) / 2
+                for j, (clave, color) in enumerate([("Ingreso", VERDE), ("Gasto", ROJO)]):
+                    valor = datos[nombre][clave]
+                    if valor <= 0:
+                        continue
+                    x = x0 + j * (barra + 3)
+                    cv.create_rectangle(x, h - aba_m - alto * valor / tope, x + barra, h - aba_m,
+                                        fill=color, outline="")
+                cv.create_text(izq_m + i * grupo + grupo / 2, h - aba_m + 14,
+                               text=nombre if len(nombre) <= 9 else nombre[:8] + "…",
+                               fill="#333", font=("Segoe UI", 8))
+            cv.create_line(izq_m, h - aba_m, w - der_m, h - aba_m, fill="#999")
+
+            for k, (txt, color) in enumerate([("Ingresos", VERDE), ("Gastos", ROJO)]):   # leyenda
+                x = izq_m + k * 85
+                cv.create_rectangle(x, 9, x + 11, 20, fill=color, outline="")
+                cv.create_text(x + 16, 14.5, text=txt, anchor="w", font=("Segoe UI", 9), fill="#333")
+
+        cv.bind("<Configure>", dibujar)      # se vuelve a dibujar si cambia el tamaño
 
     def obtener(self, mid):
         with conn() as c:
