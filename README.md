@@ -1,11 +1,3 @@
 # Estructura-de-Datos
 
-El codigo es la que dice Ventas.py
-
-insertar(): Lo que hace es guarda una cantidad de venta en la posición correspondiente de la matriz, utilizando el departamento y mes seleccionados por el usuario.
-
-buscar(): Lo que hace es que consulta una venta específica dentro de la matriz, identificando el departamento y mes, y posteriormente muestra la cantidad registrada al usuario.
-
-eliminar():Lo que hace es que elimina una venta específica de la matriz, reemplazando su valor por cero para indicar que ya no existe información registrada.
-
-mostrar_ventas(): Recorre toda la matriz para mostrar las ventas correspondientes a cada departamento y mes, organizándolas visualmente en forma de tabla.
+En esta actividad aprendí cómo funciona la Torre de Hanoi y la recursividad en Python. El programa utiliza 4 funciones: hanoi(), contar_movimientos(), medir_calculo() y main(), cada una con una tarea diferente. También observé que, al aumentar la cantidad de discos, se necesitan muchos más movimientos para resolver el problema. Esto me ayudó a comprender mejor cómo funciona la recursividad y cómo medir el tiempo de ejecución de un programa.
