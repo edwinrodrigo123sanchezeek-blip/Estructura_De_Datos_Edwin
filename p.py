@@ -16,7 +16,7 @@ from google.genai import types
 # CONFIGURACIÓN DE PÁGINA Y ESTILOS
 # ==============================================================================
 st.set_page_config(
-    page_title="Aventura Lineal: Programación Lineal Exacta Paso a Paso",
+    page_title="Aventura Lineal: Programación Lineal Paso a Paso",
     page_icon="🧭",
     layout="wide"
 )
@@ -119,7 +119,7 @@ def build_equation_latex(coeffs, var_names, sense=None, rhs=None):
 # ==============================================================================
 def render_sign_flip_explanation(obj_type, c, var_names, pdf_blocks):
     st.markdown('<div class="step-header">💡 ¿Por qué la Función Objetivo positiva se vuelve NEGATIVA en la tabla?</div>', unsafe_allow_html=True)
-    
+
     z_orig = build_equation_latex(c, var_names)
     neg_c = [-x for x in c]
     z_despejada = build_equation_latex(neg_c, var_names)
@@ -128,21 +128,20 @@ def render_sign_flip_explanation(obj_type, c, var_names, pdf_blocks):
     <div class="kid-box">
     <b>⚖️ ¡Imagina una balanza de dos platillos!</b><br>
     Al principio tenemos la ecuación en equilibrio:<br>
-    En el platillo izquierdo está <b>Z</b> (nuestro premio total), y en el platillo derecho están las ganancias de cada producto (por ejemplo: <code>8x₁ + 10x₂</code>).<br><br>
-    Para meter esta ecuación en nuestra <b>Tabla Símplex</b>, necesitamos que <b>TODAS las letras queden del lado izquierdo</b> y que del lado derecho (<b>L.D.</b>) quede un <b>0</b>.<br>
-    Como en las ecuaciones lo que está sumando a la derecha pasa <b>restando</b> a la izquierda, ¡los números positivos cruzan el puente del signo <code>=</code> y se vuelven <b>negativos</b>!
+    En un lado está <b>Z</b> (nuestro premio o costo total) y del otro lado están las ganancias o costos de cada variable (por ejemplo: <code>8x₁ + 10x₂</code>).<br><br>
+    Para meter esta ecuación en la <b>Tabla Símplex</b>, pasamos todo al lado izquierdo para que del lado derecho (<b>L.D.</b>) quede <b>0</b>. Al cruzar el signo <code>=</code>, lo que sumaba pasa <b>restando</b> (con signo negativo).
     </div>
     """, unsafe_allow_html=True)
 
     if obj_type == "Maximizar":
-        st.latex(f"Z = {z_orig} \\quad \\xrightarrow{{\\text{{Pasamos todo a la izquierda}}}} \\quad Z {z_despejada} = 0")
-        st.write("👉 Por eso en la fila **Z** de la tabla inicial aparecen con signo negativo (`-`), mientras que en la columna **Z** va un `1` y en **L.D.** va un `0`.")
-        pdf_blocks.append(("text", f"Explicacion de signos: Z = {build_equation_text(c, [v.replace('_','') for v in var_names])} se iguala a cero pasando los terminos a la izquierda: Z {build_equation_text(neg_c, [v.replace('_','') for v in var_names])} = 0."))
+        st.latex(f"Z = {z_orig} \\quad \\xrightarrow{{\\text{{Pasamos a la izquierda}}}} \\quad Z {z_despejada} = 0")
+        st.write("👉 Por eso en la fila **Z** aparecen con signo `-` al maximizar.")
+        pdf_blocks.append(("text", f"Explicacion de signos: Z = {build_equation_text(c, [v.replace('_','') for v in var_names])} se iguala a cero pasando los terminos a la izquierda."))
     else:
         st.latex(f"\\text{{Minimizar }} Z = {z_orig} \\iff \\text{{Maximizar }} (-Z) = {z_despejada}")
         st.latex(f"-Z = {z_despejada} \\quad \\xrightarrow{{\\text{{Pasamos a la izquierda}}}} \\quad -Z + {z_orig} = 0")
-        st.write("👉 Como queremos **Minimizar**, multiplicamos Z por `-1` para convertirlo en maximización, y al pasar los términos a la izquierda quedan positivos en la fila Z.")
-        pdf_blocks.append(("text", "Explicacion de signos (Minimizacion): Minimizar Z equivale a Maximizar -Z, por lo que al igualar a 0 los coeficientes quedan con signo opuesto."))
+        st.write("👉 Al minimizar, trabajamos con `-Z` (o con su signo correspondiente en la tabla) y al final devolvemos el valor real de `Z`.")
+        pdf_blocks.append(("text", "Explicacion de signos (Minimizacion): Minimizar Z equivale a trabajar con -Z y ajustar el signo al final."))
 
 # ==============================================================================
 # GENERADOR DE REPORTE EN PDF (FPDF2)
@@ -388,16 +387,9 @@ def solve_graphical(obj_type, c, constraints, pdf_blocks):
     st.success(f"🏆 Solución Óptima: Vértice **{best_pt[0]} ({fmt_f(best_pt[1])}, {fmt_f(best_pt[2])})** con **Z = {fmt_f(best_val)}**")
 
 # ==============================================================================
-# MOTOR 2: RESOLUCIÓN EXACTA AL ESTILO DE TU CUADERNO (SUB-TABLAS PASO A PASO)
+# MOTOR 2: RESOLUCIÓN PROGRESIVA POR SUB-TABLAS
 # ==============================================================================
 def run_notebook_simplex_iterations(tableau, col_names, row_names, basic_vars, pdf_blocks, obj_col_label="Z", phase_label=""):
-    """
-    Resuelve exactamente como en tus fotos del cuaderno:
-    - Columna Z (o W) con 1 en fila 0 y 0 en las demás, y última columna 'L.D.'
-    - Muestra los cocientes L.D. / Columna Pivote para elegir quién sale.
-    - Muestra la sub-tabla tras dividir la Fila Pivote (ej. F2 / 30).
-    - Muestra una sub-tabla progresiva por cada fila transformada (ej. F1 + 10*F2, F3 - 2*F2, F4 - 4*F2).
-    """
     iteration = 0
     max_iterations = 25
 
@@ -407,12 +399,10 @@ def run_notebook_simplex_iterations(tableau, col_names, row_names, basic_vars, p
         st.markdown(f"### 🔄 {titulo_it}")
         pdf_blocks.append(("subtitle", titulo_it))
 
-        # Tabla al inicio de la iteración
         st.write("**Tabla actual:**")
         st.dataframe(format_tableau_df(tableau, col_names, row_names), use_container_width=True)
         pdf_blocks.append(("table", col_names, row_names, [[fmt_f(c) for c in r] for r in tableau]))
 
-        # Buscar el más negativo en la fila objetivo (excluyendo col 0 'Z/W' y última col 'L.D.')
         obj_coeffs = tableau[0][1:-1]
         min_coeff = min(obj_coeffs)
 
@@ -422,17 +412,14 @@ def run_notebook_simplex_iterations(tableau, col_names, row_names, basic_vars, p
             pdf_blocks.append(("text", msg_fin))
             return "optimal", tableau, basic_vars, row_names
 
-        # Columna pivote (sumamos 1 porque saltamos la columna 0 que es Z/W)
         pivot_col = obj_coeffs.index(min_coeff) + 1
         entering_var = col_names[pivot_col]
 
-        st.markdown(f"**1️⃣ Columna Pivote (Entra `{entering_var}`):** Es el número más negativo en la fila `{obj_col_label}` (**`{fmt_f(min_coeff)}`**).")
+        st.markdown(f"**1️⃣ Columna Pivote (Entra `{entering_var}`):** Valor más negativo en `{obj_col_label}` = **`{fmt_f(min_coeff)}`**.")
         pdf_blocks.append(("text", f"1) Entra {entering_var} (valor mas negativo: {fmt_f(min_coeff)})."))
 
-        # Prueba del cociente (L.D. / Columna Pivote)
         st.markdown(f"**2️⃣ Cocientes (`L.D. ÷ {entering_var}`) para ver qué fila sale:**")
         ratios = []
-        ratio_lines = []
         for r in range(1, len(tableau)):
             ld_val = tableau[r][-1]
             col_val = tableau[r][pivot_col]
@@ -440,46 +427,38 @@ def run_notebook_simplex_iterations(tableau, col_names, row_names, basic_vars, p
             if col_val > 0:
                 ratio = ld_val / col_val
                 ratios.append((ratio, r))
-                ratio_lines.append(f"- Fila **F{r+1} (`{b_var}`)**: `{fmt_f(ld_val)} / {fmt_f(col_val)} = {fmt_f(ratio)}` ✅")
+                st.markdown(f"- Fila **F{r+1} (`{b_var}`)**: `{fmt_f(ld_val)} / {fmt_f(col_val)} = {fmt_f(ratio)}` ✅")
             else:
-                ratio_lines.append(f"- Fila **F{r+1} (`{b_var}`)**: `{fmt_f(ld_val)} / {fmt_f(col_val)}` ❌ *(no se toma en cuenta)*")
-
-        for line in ratio_lines:
-            st.markdown(line)
+                st.markdown(f"- Fila **F{r+1} (`{b_var}`)**: `{fmt_f(ld_val)} / {fmt_f(col_val)}` ❌ *(no se toma en cuenta)*")
 
         if not ratios:
-            st.error("🚀 Problema No Acotado (no hay coeficientes positivos en la columna pivote).")
+            st.error("🚀 Problema No Acotado (no hay valores positivos en la columna pivote).")
             pdf_blocks.append(("text", "Problema No Acotado."))
             return "unbounded", tableau, basic_vars, row_names
 
         min_ratio, pivot_row = min(ratios, key=lambda x: x[0])
         leaving_var = basic_vars[pivot_row - 1]
         pivot_element = tableau[pivot_row][pivot_col]
-        f_piv_num = pivot_row + 1  # F2, F3, etc. (1-indexado como en tu cuaderno)
+        f_piv_num = pivot_row + 1
 
         st.info(f"🎯 **Entra `{entering_var}` y Sale `{leaving_var}`** (menor cociente = `{fmt_f(min_ratio)}`). **Elemento Pivote = `{fmt_f(pivot_element)}`** (en **F{f_piv_num}**).")
-        pdf_blocks.append(("text", f"2) Entra {entering_var} y Sale {leaving_var} (menor cociente: {fmt_f(min_ratio)}). Elemento pivote: {fmt_f(pivot_element)} en F{f_piv_num}."))
+        pdf_blocks.append(("text", f"2) Entra {entering_var} y Sale {leaving_var} (menor cociente: {fmt_f(min_ratio)}). Pivote: {fmt_f(pivot_element)} en F{f_piv_num}."))
 
-        # ======================================================================
-        # SUB-TABLAS PROGRESIVAS EXACTAMENTE COMO EN TUS HOJAS DE CUADERNO
-        # ======================================================================
-        st.markdown("**3️⃣ Transformación progresiva de la tabla (Operación por operación):**")
+        st.markdown("**3️⃣ Transformación progresiva de la tabla:**")
         working_tab = [row[:] for row in tableau]
         working_rows = row_names[:]
 
-        # Paso A: Dividir la Fila Pivote entre el Elemento Pivote
         old_piv_row = working_tab[pivot_row][:]
         new_piv_row = [cell / pivot_element for cell in old_piv_row]
         working_tab[pivot_row] = new_piv_row
         working_rows[pivot_row] = entering_var
 
         op_piv_label = f"F{f_piv_num} / {fmt_f(pivot_element)}"
-        st.markdown(f"**Paso A — Normalizar fila pivote (`{op_piv_label}`): Entra `{entering_var}` en lugar de `{leaving_var}`**")
+        st.markdown(f"**Paso A — Dividir fila pivote (`{op_piv_label}`): Entra `{entering_var}` por `{leaving_var}`**")
         st.dataframe(format_tableau_df(working_tab, col_names, working_rows), use_container_width=True)
         pdf_blocks.append(("text", f"Paso A: {op_piv_label} (Entra {entering_var})"))
         pdf_blocks.append(("table", col_names, working_rows, [[fmt_f(c) for c in r] for r in working_tab]))
 
-        # Paso B: Actualizar una fila a la vez y mostrar la tabla resultante tras cada operación
         step_letters = "BCDEFGHIJ"
         letter_idx = 0
         for r in range(len(working_tab)):
@@ -499,27 +478,22 @@ def run_notebook_simplex_iterations(tableau, col_names, row_names, basic_vars, p
             new_r = [old_r[c_i] - factor * new_piv_row[c_i] for c_i in range(len(col_names))]
             working_tab[r] = new_r
 
-            # Notación idéntica a tu cuaderno: ej. F1 + 10*F2  o  F3 - 2*F2
             if factor < 0:
                 op_str = f"F{f_curr_num} + {fmt_f(abs(factor))}*F{f_piv_num}"
             else:
                 op_str = f"F{f_curr_num} - {fmt_f(factor)}*F{f_piv_num}"
 
             st.markdown(f"**Paso {step_let} — Actualizar F{f_curr_num} (`{target_label}`) con `{op_str}`:**")
-            
-            # Mostrar el detalle aritmético de cada celda de esa fila
             calc_details = [
                 f"**{col_names[c_i]}**: `{fmt_f(old_r[c_i])} - ({fmt_f(factor)})×({fmt_f(new_piv_row[c_i])}) = {fmt_f(new_r[c_i])}`"
                 for c_i in range(len(col_names))
             ]
             st.caption(" | ".join(calc_details))
 
-            # Mostrar la tabla actualizada hasta este paso
             st.dataframe(format_tableau_df(working_tab, col_names, working_rows), use_container_width=True)
             pdf_blocks.append(("text", f"Paso {step_let}: {op_str}"))
             pdf_blocks.append(("table", col_names, working_rows, [[fmt_f(c) for c in r] for r in working_tab]))
 
-        # Guardar estado al terminar todas las filas de esta iteración
         tableau = working_tab
         basic_vars[pivot_row - 1] = entering_var
         row_names = working_rows
@@ -528,7 +502,7 @@ def run_notebook_simplex_iterations(tableau, col_names, row_names, basic_vars, p
     return "max_iter", tableau, basic_vars, row_names
 
 # ==============================================================================
-# MOTOR 3: MÉTODO SÍMPLEX (NUMERACIÓN CONTINUA x1, x2, x3, x4... + COLUMNA Z + L.D.)
+# MOTOR 3: MÉTODO SÍMPLEX
 # ==============================================================================
 def solve_simplex_notebook(obj_type, c, constraints, pdf_blocks):
     num_vars = len(c)
@@ -552,19 +526,15 @@ def solve_simplex_notebook(obj_type, c, constraints, pdf_blocks):
         st.latex(f"\\text{{R{idx}: }} {build_equation_latex(coeffs, dec_vars_tex, sense, rhs)}")
         pdf_blocks.append(("text", f"R{idx}: {build_equation_text(coeffs, dec_vars_txt, sense, rhs)}"))
 
-    # Explicación de por qué Z pasa negativa
     render_sign_flip_explanation(obj_type, c, dec_vars_tex, pdf_blocks)
 
-    # PASO 1: VARIABLES DE HOLGURA CON NUMERACIÓN CONTINUA (x_{n+1}, x_{n+2}...)
-    st.markdown('<div class="step-header">Paso 1: Agregar Variables de Holgura (numeración continua) e igualar a 0</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-header">Paso 1: Variables de Holgura (numeración continua) e igualar a 0</div>', unsafe_allow_html=True)
     pdf_blocks.append(("title", "Paso 1: Ecuaciones en Forma Estandar"))
 
     slack_vars_txt = [f"x{num_vars + i + 1}" for i in range(num_cons)]
     slack_vars_tex = [f"x_{num_vars + i + 1}" for i in range(num_cons)]
     all_vars_txt = dec_vars_txt + slack_vars_txt
     all_vars_tex = dec_vars_tex + slack_vars_tex
-
-    st.write(f"Como tenemos {num_vars} variables originales ({', '.join(dec_vars_txt)}), las variables de holgura continúan la numeración: **{', '.join(slack_vars_txt)}**.")
 
     mult_z = Fraction(1) if obj_type == "Maximizar" else Fraction(-1)
     z_coeffs_all = [-mult_z * ci for ci in c] + [Fraction(0)] * num_cons
@@ -576,7 +546,6 @@ def solve_simplex_notebook(obj_type, c, constraints, pdf_blocks):
         st.latex(build_equation_latex(coeffs + s_vec, all_vars_tex, "=", rhs))
         pdf_blocks.append(("text", f"R{idx+1}: {build_equation_text(coeffs + s_vec, all_vars_txt, '=', rhs)}"))
 
-    # Construir Tabla Inicial con columna Z al inicio y L.D. al final
     col_names = ["Z"] + all_vars_txt + ["L.D."]
     z_row = [Fraction(1)] + z_coeffs_all + [Fraction(0)]
     tableau = [z_row]
@@ -596,7 +565,7 @@ def solve_simplex_notebook(obj_type, c, constraints, pdf_blocks):
         render_final_solution_and_verification(obj_type, c, constraints, final_tab, final_basics, mult_z, num_vars, pdf_blocks)
 
 # ==============================================================================
-# MOTOR 4: MÉTODO DE LAS DOS FASES (CON COLUMNA W/Z, L.D. Y SUB-TABLAS)
+# MOTOR 4: MÉTODO DE LAS DOS FASES
 # ==============================================================================
 def solve_two_phase_notebook(obj_type, c, constraints, pdf_blocks):
     num_vars = len(c)
@@ -620,9 +589,8 @@ def solve_two_phase_notebook(obj_type, c, constraints, pdf_blocks):
 
     render_sign_flip_explanation(obj_type, c, dec_vars_tex, pdf_blocks)
 
-    # PASO 1: HOLGURA/EXCESO (x_{n+1}...) Y ARTIFICIALES (a1, a2...)
     st.markdown('<div class="step-header">Paso 1: Variables de Holgura/Exceso (x) y Artificiales (a)</div>', unsafe_allow_html=True)
-    pdf_blocks.append(("title", "Paso 1: Incorporacion de Variables de Holgura, Exceso y Artificiales"))
+    pdf_blocks.append(("title", "Paso 1: Variables de Holgura, Exceso y Artificiales"))
 
     next_x_idx = num_vars + 1
     slack_excess_txt = []
@@ -671,11 +639,8 @@ def solve_two_phase_notebook(obj_type, c, constraints, pdf_blocks):
         st.latex(build_equation_latex(vec, all_vars_p1, "=", info["rhs"]))
         pdf_blocks.append(("text", f"R{idx}: {build_equation_text(vec, all_vars_p1, '=', info['rhs'])}"))
 
-    # FASE 1
-    st.markdown('<div class="step-header">🚀 FASE 1: Eliminar Variables Artificiales (Minimizar W = a₁ + a₂...)</div>', unsafe_allow_html=True)
-    pdf_blocks.append(("title", "FASE 1: Minimizar W (Eliminar variables artificiales)"))
-
-    st.latex(f"\\text{{Minimizar }} W = {' + '.join(artificial_txt)} \\implies -W + {' + '.join(artificial_txt)} = 0")
+    st.markdown('<div class="step-header">🚀 FASE 1: Eliminar Variables Artificiales (Minimizar W)</div>', unsafe_allow_html=True)
+    pdf_blocks.append(("title", "FASE 1: Minimizar W"))
 
     tableau_p1 = []
     basic_vars = []
@@ -693,13 +658,11 @@ def solve_two_phase_notebook(obj_type, c, constraints, pdf_blocks):
         row[-1] = info["rhs"]
         tableau_p1.append(row)
 
-    # Fila W inicial: [1 en col W, 0..., +1 en artificiales, ..., 0 en L.D.]
     w_row = [Fraction(0)] * len(col_names_p1)
     w_row[0] = Fraction(1)
     for a_n in artificial_txt:
         w_row[col_names_p1.index(a_n)] = Fraction(1)
 
-    st.write("**Preparación de la Fila W (hacer 0 las columnas de variables artificiales básicas):**")
     for r_idx, b_var in enumerate(basic_vars):
         if b_var in artificial_txt:
             st.latex(f"F_1 (W) \\leftarrow F_1 (W) - F_{{{r_idx+2}}} ({b_var})")
@@ -711,17 +674,15 @@ def solve_two_phase_notebook(obj_type, c, constraints, pdf_blocks):
     )
 
     if status_p1 != "optimal" or end_tab_p1[0][-1] != 0:
-        st.error(f"🚫 Problema Infactible: W final = {fmt_f(abs(end_tab_p1[0][-1]))} ≠ 0. Las restricciones se contradicen.")
+        st.error(f"🚫 Problema Infactible: W final = {fmt_f(abs(end_tab_p1[0][-1]))} ≠ 0.")
         pdf_blocks.append(("text", "Resultado: Problema Infactible (W != 0)."))
         return
 
-    st.success("✅ **¡Fase 1 completada con éxito!** `W = 0` y todas las variables artificiales salieron de la base.")
+    st.success("✅ **¡Fase 1 completada!** `W = 0` y todas las variables artificiales salieron.")
 
-    # FASE 2
     st.markdown('<div class="step-header">🏁 FASE 2: Resolver el Problema Original con Z</div>', unsafe_allow_html=True)
     pdf_blocks.append(("title", "FASE 2: Resolver el problema original con Z"))
 
-    # Quitar columnas artificiales y renombrar W -> Z
     keep_indices = [i for i, name in enumerate(col_names_p1) if name not in artificial_txt]
     col_names_p2 = ["Z"] + [col_names_p1[i] for i in keep_indices[1:]]
     clean_rows = [[end_tab_p1[r_idx][i] for i in keep_indices] for r_idx in range(1, len(end_tab_p1))]
@@ -749,10 +710,10 @@ def solve_two_phase_notebook(obj_type, c, constraints, pdf_blocks):
         render_final_solution_and_verification(obj_type, c, norm_constraints, end_tab_p2, end_basics_p2, mult_z, num_vars, pdf_blocks)
 
 # ==============================================================================
-# BLOQUE FINAL: RESULTADOS Y COMPROBACIÓN SUSTITUYENDO EN EL MODELO ORIGINAL
+# BLOQUE FINAL: RESULTADOS Y COMPROBACIÓN
 # ==============================================================================
 def render_final_solution_and_verification(obj_type, c, constraints, final_tab, final_basics, mult_z, num_vars, pdf_blocks):
-    st.markdown('<div class="step-header">Paso Final: Solución Óptima y Comprobación (Sustitución)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-header">Paso Final: Solución Óptima y Comprobación</div>', unsafe_allow_html=True)
     pdf_blocks.append(("title", "Paso Final: Solucion Optima y Comprobacion"))
 
     sol_dict = {f"x{i+1}": Fraction(0) for i in range(num_vars)}
@@ -766,15 +727,11 @@ def render_final_solution_and_verification(obj_type, c, constraints, final_tab, 
     for i in range(num_vars):
         v_key = f"x{i+1}"
         cols[i].metric(label=f"Variable {v_key}", value=fmt_f(sol_dict[v_key]))
-    cols[-1].metric(label=f"Valor Óptimo Z", value=fmt_f(final_z))
+    cols[-1].metric(label="Valor Óptimo Z", value=fmt_f(final_z))
 
     res_txt = "Solucion Optima: " + ", ".join([f"{k} = {fmt_f(v)}" for k, v in sol_dict.items()]) + f" | Z = {fmt_f(final_z)}"
     st.success(f"🏆 **{res_txt}**")
     pdf_blocks.append(("text", res_txt))
-
-    # Comprobación paso a paso sustituyendo en Z y en cada restricción (igual que al final de tu hoja 2)
-    st.markdown("**🔍 Comprobación sustituyendo los valores en el problema original:**")
-    pdf_blocks.append(("subtitle", "Comprobacion en el modelo original:"))
 
     x_vals = [sol_dict[f"x{i+1}"] for i in range(num_vars)]
     z_terms_tex = " + ".join([f"{fmt_latex_f(c[i])}\\left({fmt_latex_f(x_vals[i])}\\right)" for i in range(num_vars)])
@@ -791,13 +748,12 @@ def render_final_solution_and_verification(obj_type, c, constraints, final_tab, 
         pdf_blocks.append(("text", f"R{idx}: {r_terms_txt} = {fmt_f(lhs_val)} {sense} {fmt_f(rhs)} [OK]"))
 
 # ==============================================================================
-# INTERFAZ PRINCIPAL + CÁMARA / FOTO
+# INTERFAZ PRINCIPAL + CÁMARA BAJO DEMANDA + PDF
 # ==============================================================================
 st.title("🧭 Aventura Lineal: Programación Lineal Paso a Paso")
-st.write("Resuelve exactamente con tablas progesivas (columna Z, L.D. y operaciones fila por fila), escanea con cámara y descarga en PDF.")
+st.write("Resuelve paso a paso con tablas progresivas, escanea problemas cuando tú decidas y descarga en PDF.")
 
 if "lp_data" not in st.session_state:
-    # Cargado por defecto con EL EJERCICIO DE TU CUADERNO
     st.session_state.lp_data = {
         "obj_type": "Maximizar",
         "num_vars": 2,
@@ -810,12 +766,15 @@ if "lp_data" not in st.session_state:
         ]
     }
 
+if "camera_active" not in st.session_state:
+    st.session_state.camera_active = False
+
 st.sidebar.header("⚙️ Configuración")
 metodo = st.sidebar.selectbox("1. Elige el Método:", ["Método Símplex", "Método de las Dos Fases", "Método Gráfico"])
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚡ Ejemplos Rápidos")
-if st.sidebar.button("📓 Ej. 1: Ejercicio de tu Cuaderno (Max Z=8x1+10x2)"):
+if st.sidebar.button("📓 Ej. 1: Ejercicio de tu Libreta (Max Z=8x1+10x2)"):
     st.session_state.lp_data = {
         "obj_type": "Maximizar", "num_vars": 2, "num_cons": 3,
         "c": [8.0, 10.0],
@@ -832,21 +791,33 @@ if st.sidebar.button("🚀 Ej. 3: Misión Espacial (Dos Fases Mixto)"):
         "c": [5.0, 4.0], "cons": [([1.0, 1.0], "<=", 10.0), ([2.0, 1.0], ">=", 6.0), ([1.0, 2.0], "=", 12.0)]
     }
 
-# ESCÁNER CON CÁMARA O SUBIDA DE FOTO
-with st.expander("📸 Escanear problema con Cámara o Subir Foto (Auto-rellenar cuadros)", expanded=False):
+# ESCÁNER CON CÁMARA SOLO BAJO DEMANDA O SUBIDA DE FOTO
+with st.expander("📸 Escanear problema con Foto o Cámara (La cámara no se abre sola)", expanded=False):
     api_key_input = st.text_input("🔑 Tu Gemini API Key:", type="password", value=os.getenv("GEMINI_API_KEY", ""))
-    cam_col1, cam_col2 = st.columns(2)
-    with cam_col1:
-        foto_camara = st.camera_input("Tomar foto con la cámara")
-    with cam_col2:
-        foto_archivo = st.file_uploader("O subir imagen (JPG, PNG)", type=["jpg", "jpeg", "png"])
+    foto_archivo = st.file_uploader("Subir imagen desde tu dispositivo (JPG, PNG)", type=["jpg", "jpeg", "png"])
+
+    col_cam1, col_cam2 = st.columns(2)
+    with col_cam1:
+        if not st.session_state.camera_active:
+            if st.button("📷 Encender cámara ahora"):
+                st.session_state.camera_active = True
+                st.rerun()
+        else:
+            if st.button("🛑 Apagar cámara"):
+                st.session_state.camera_active = False
+                st.rerun()
+
+    foto_camara = None
+    if st.session_state.camera_active:
+        foto_camara = st.camera_input("Toma la foto de tu problema", key="cam_widget")
 
     imagen_elegida = foto_camara if foto_camara is not None else foto_archivo
     if imagen_elegida is not None:
         img_pil = Image.open(imagen_elegida)
+        st.image(img_pil, caption="Imagen cargada", width=300)
         if st.button("✨ Leer foto y rellenar cuadros automáticamente"):
             if not api_key_input:
-                st.warning("⚠️ Por favor escribe tu Gemini API Key arriba para analizar la imagen.")
+                st.warning("⚠️ Escribe primero tu Gemini API Key arriba.")
             else:
                 with st.spinner("Leyendo ecuaciones de la imagen..."):
                     try:
@@ -861,7 +832,8 @@ with st.expander("📸 Escanear problema con Cámara o Subir Foto (Auto-rellenar
                                 for item in parsed.get("constraints", [])
                             ]
                         }
-                        st.success("✅ ¡Problema detectado y cargado!")
+                        st.session_state.camera_active = False
+                        st.success("✅ ¡Problema detectado y cargado en los cuadros!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"No se pudo leer la imagen: {e}")
@@ -903,7 +875,7 @@ for r in range(n_cons):
             v = st.number_input(f"R{r+1} · x{i+1}", value=float(c_def), step=1.0, key=f"c_{r}_{i}")
             row_coeffs.append(to_frac(v))
     with r_cols[n_vars]:
-        s_opts = ["<="] if metodo == "Método Símplex" else ["<=", ">=", "="]
+        s_opts = ["<=", ">=", "="]
         s_idx = s_opts.index(def_row[1]) if def_row[1] in s_opts else 0
         sense = st.selectbox("Signo", s_opts, index=s_idx, key=f"s_{r}")
     with r_cols[n_vars + 1]:
@@ -915,7 +887,7 @@ for r in range(n_cons):
         constraints_inputs.append((row_coeffs, sense, to_frac(rhs_val)))
 
 st.markdown("---")
-if st.button("🚀 Resolver Paso a Paso (Estilo Cuaderno) y Generar PDF", type="primary", use_container_width=True):
+if st.button("🚀 Resolver Paso a Paso y Generar PDF", type="primary", use_container_width=True):
     pdf_report_blocks = []
     if metodo == "Método Gráfico":
         solve_graphical(obj_type, c_inputs, constraints_inputs, pdf_report_blocks)
