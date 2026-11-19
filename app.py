@@ -1,11 +1,11 @@
-# app.py — PL Solver completo
+# app.py — PL Solver con interfaz didáctica
 import streamlit as st
 import pandas as pd
 import math
 from fractions import Fraction
 from io import BytesIO
 
-st.set_page_config(page_title="PL Solver", page_icon="📐", layout="wide")
+st.set_page_config(page_title="PL Solver Didáctico", page_icon="📐", layout="wide")
 
 # ═══════════════════════════════════════════════════════════════════
 # 1. ARITMÉTICA CON FRACCIONES
@@ -30,7 +30,7 @@ def parse_frac(s):
     return Fraction(s)
 
 # ═══════════════════════════════════════════════════════════════════
-# 2. MOTOR SIMPLEX / DOBLE FASE
+# 2. MOTOR SIMPLEX / DOBLE FASE (Variables: s, e, R)
 # ═══════════════════════════════════════════════════════════════════
 def _build_row(M, basis, cvec, total):
     m = len(M); r = [Fraction(0)]*(total+1)
@@ -108,6 +108,8 @@ def solve_lp(c_in, A, senses, b_in, is_max):
 
     names = [f"x{j+1}" for j in range(n)]
     basis = [-1]*m; artif = []
+    
+    # ASIGNACIÓN DE NOMBRES: s (holgura), e (exceso), R (artificial)
     for e in extras:
         col = len(names)
         if e["type"] == "slack":
@@ -115,7 +117,7 @@ def solve_lp(c_in, A, senses, b_in, is_max):
         elif e["type"] == "surplus":
             names.append(f"e{e['row']+1}"); M[e["row"]][col] = Fraction(-1)
         else:
-            names.append(f"a{e['row']+1}"); M[e["row"]][col] = Fraction(1)
+            names.append(f"R{e['row']+1}"); M[e["row"]][col] = Fraction(1)
             basis[e["row"]] = col; artif.append(col)
 
     res.update({"varNames": names, "totalCols": total, "artifCols": artif})
@@ -280,17 +282,37 @@ def solve_graphical(c, A, senses, b, is_max, simplex_res):
     return {"png": buf.read(), "vertices": verts, "feasible": len(poly) >= 3}
 
 # ═══════════════════════════════════════════════════════════════════
-# 4. INTERFAZ STREAMLIT
+# 4. INTERFAZ STREAMLIT ESTILO "PASO A PASO"
 # ═══════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
+/* Estilos generales de las tablas */
+.custom-table { border-collapse: collapse; margin: 15px 0; font-size: 0.95rem; width: 100%; font-variant-numeric: tabular-nums; }
+.custom-table th { background-color: #e0f2fe; color: #0369a1; padding: 12px; text-align: center; border: 1px solid #bae6fd; font-weight: bold; }
+.custom-table td { padding: 10px 12px; text-align: center; border: 1px solid #e2e8f0; background-color: white; }
+.custom-table td.rhs { background-color: #ecfdf5; color: #047857; font-weight: bold; border-left: 2px solid #10b981; }
+.custom-table td.basis { background-color: #f8fafc; font-weight: bold; color: #334155; }
+.custom-table tr.z-row td { background-color: #fef2f2; color: #991b1b; font-weight: bold; border-top: 2px solid #ef4444; }
+.custom-table td.pivot { background-color: #4f46e5; color: white; font-weight: bold; border-radius: 4px; }
+.custom-table td.enter-col { background-color: #f3e8ff; }
+
+/* Cajas de explicación */
+.explain-box { background-color: #f0f9ff; border-left: 5px solid #3b82f6; padding: 16px; border-radius: 8px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.explain-box h4 { margin-top: 0; color: #1e3a8a; font-size: 1.05rem; margin-bottom: 10px; }
+.explain-box ul { margin: 0; padding-left: 20px; color: #334155; font-size: 0.95rem; line-height: 1.6; }
+.explain-box li { margin-bottom: 6px; }
+.explain-box b { color: #1e293b; }
+.explain-box code { background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+
+/* Fracciones */
 .frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;line-height:1;font-size:.92em;margin:0 2px}
 .frac .num{border-bottom:1.4px solid currentColor;padding:0 3px}
 .frac .den{padding:0 3px}
-.metric-box{background:#f8fafc;border-radius:9px;padding:10px 14px;border:1px solid #e2e8f0;text-align:center}
-.metric-box small{display:block;color:#64748b;font-size:.72em;text-transform:uppercase;letter-spacing:.6px;font-weight:700}
-.metric-box .v{font-size:1.15rem;font-weight:800;color:#047857}
-.explain{background:#f1f5f9;border-left:4px solid #4f46e5;padding:10px 14px;margin:10px 0;border-radius:6px;font-size:0.9rem;color:#334155}
+
+/* Cajas de resultados */
+.metric-box{background:#f8fafc;border-radius:12px;padding:15px;border:1px solid #e2e8f0;text-align:center;box-shadow: 0 1px 3px rgba(0,0,0,0.1);}
+.metric-box small{display:block;color:#64748b;font-size:.8em;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:5px;}
+.metric-box .v{font-size:1.4rem;font-weight:800;color:#047857;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -302,176 +324,183 @@ def html_frac(s):
     nn = n[1:] if neg else n
     return f'{"−" if neg else ""}<span class="frac"><span class="num">{nn}</span><span class="den">{d}</span></span>'
 
-EXAMPLES = [
-    {"name": "Ejemplo 1 · Max ≤", "n": 2, "is_max": True, "obj": ["3","5"],
-     "cons": [{"c":["1","0"],"s":"<=","r":"4"}, {"c":["0","2"],"s":"<=","r":"12"}, {"c":["3","2"],"s":"<=","r":"18"}]},
-    {"name": "Ejemplo 2 · Min ≥", "n": 2, "is_max": False, "obj": ["2","3"],
-     "cons": [{"c":["1","1"],"s":">=","r":"4"}, {"c":["1","3"],"s":">=","r":"6"}, {"c":["2","1"],"s":">=","r":"5"}]},
-    {"name": "Ejemplo 3 · Max mixto", "n": 2, "is_max": True, "obj": ["5","4"],
-     "cons": [{"c":["6","4"],"s":"<=","r":"24"}, {"c":["1","2"],"s":"<=","r":"6"}, {"c":["-1","1"],"s":"<=","r":"1"}, {"c":["0","1"],"s":"<=","r":"2"}]},
-]
-
-MAX_N, MAX_CONS = 5, 12
-for i in range(MAX_CONS):
-    st.session_state.setdefault(f"r_{i}", "0"); st.session_state.setdefault(f"s_{i}", "<=")
-    for j in range(MAX_N): st.session_state.setdefault(f"a_{i}_{j}", "0")
-for j in range(MAX_N): st.session_state.setdefault(f"obj_{j}", "0")
-st.session_state.setdefault("nv", 2); st.session_state.setdefault("n_cons", 3); st.session_state.setdefault("mm", "Maximizar")
-
-def load_example(idx):
-    ex = EXAMPLES[idx]
-    st.session_state.nv = ex["n"]; st.session_state.n_cons = len(ex["cons"])
-    st.session_state.mm = "Maximizar" if ex["is_max"] else "Minimizar"
-    for j in range(MAX_N): st.session_state[f"obj_{j}"] = ex["obj"][j] if j < ex["n"] else "0"
-    for i in range(MAX_CONS):
-        if i < len(ex["cons"]):
-            con = ex["cons"][i]
-            for j in range(MAX_N): st.session_state[f"a_{i}_{j}"] = con["c"][j] if j < ex["n"] else "0"
-            st.session_state[f"s_{i}"] = con["s"]; st.session_state[f"r_{i}"] = con["r"]
-        else:
-            for j in range(MAX_N): st.session_state[f"a_{i}_{j}"] = "0"
-            st.session_state[f"s_{i}"] = "<="; st.session_state[f"r_{i}"] = "0"
-    st.session_state.pop("result", None)
-
-if "loaded" not in st.session_state:
-    load_example(0); st.session_state.loaded = True
-
-st.markdown("## 📐 Resolvedor de Programación Lineal")
-left, right = st.columns([1, 1.35], gap="large")
-
-with left:
-    st.markdown("### Función objetivo")
-    is_max = st.radio("Objetivo", ["Maximizar", "Minimizar"], key="mm", horizontal=True) == "Maximizar"
-    n = st.selectbox("Número de variables", [2, 3, 4, 5], key="nv")
-    obj_cols = st.columns(n); obj_vals = []
+# --- BARRA LATERAL (SIDEBAR) ---
+with st.sidebar:
+    st.title("⚙️ Configuración")
+    
+    st.markdown("### 1. Dirección de la Función")
+    is_max = st.radio("Objetivo", ["Maximizar", "Minimizar"], horizontal=True) == "Maximizar"
+    
+    st.markdown("### 2. Dimensiones")
+    n = st.selectbox("Número de variables", [2, 3, 4, 5])
+    n_cons = st.number_input("Número de restricciones", min_value=1, max_value=10, value=3, step=1)
+    
+    st.markdown("### 3. Función Objetivo (Z)")
+    obj_cols = st.columns(n)
+    obj_vals = []
     for j in range(n):
         with obj_cols[j]:
-            st.markdown(f"<div style='text-align:center;color:#4f46e5;font-weight:700'>x{j+1}</div>", unsafe_allow_html=True)
-            obj_vals.append(st.text_input(f"c{j+1}", key=f"obj_{j}", label_visibility="collapsed"))
-
-    st.markdown("### Restricciones")
-    n_cons = st.number_input("Número de restricciones", 1, MAX_CONS, key="n_cons", step=1)
+            obj_vals.append(st.text_input(f"x{j+1}", value="0", key=f"obj_{j}", label_visibility="collapsed"))
+            
+    st.markdown("### 4. Restricciones")
+    st.caption("Ingresa coeficientes, signo y RHS.")
     constraints = []
     for i in range(n_cons):
-        row = st.columns(n + 2); coefs = []
+        st.markdown(f"**Restricción {i+1}**")
+        row = st.columns(n + 2)
+        coefs = []
         for j in range(n):
-            with row[j]: coefs.append(st.text_input(f"a{i}{j}", key=f"a_{i}_{j}", label_visibility="collapsed", placeholder=f"x{j+1}"))
-        with row[n]: sense = st.selectbox(f"s{i}", ["<=", ">=", "="], key=f"s_{i}", label_visibility="collapsed")
-        with row[n+1]: rhs = st.text_input(f"r{i}", key=f"r_{i}", label_visibility="collapsed", placeholder="RHS")
+            with row[j]:
+                coefs.append(st.text_input(f"a{i}{j}", value="0", key=f"a_{i}_{j}", label_visibility="collapsed", placeholder=f"x{j+1}"))
+        with row[n]:
+            sense = st.selectbox(f"s{i}", ["<=", ">=", "="], key=f"s_{i}", label_visibility="collapsed")
+        with row[n+1]:
+            rhs = st.text_input(f"r{i}", value="0", key=f"r_{i}", label_visibility="collapsed", placeholder="RHS")
         constraints.append({"coefs": coefs, "sense": sense, "rhs": rhs})
+        
+    st.divider()
+    solve_btn = st.button("▶ RESOLVER PASO A PASO", type="primary", use_container_width=True)
+    
+    # Botones de ejemplos
+    st.markdown("### 💡 Ejemplos")
+    if st.button("Cargar Ejemplo Max ≤", use_container_width=True):
+        st.session_state.ejemplo = 0
+    if st.button("Cargar Ejemplo Min ≥", use_container_width=True):
+        st.session_state.ejemplo = 1
 
-    st.markdown("### Ejemplos rápidos")
-    ecols = st.columns(3)
-    for idx, ex in enumerate(EXAMPLES):
-        ecols[idx].button(ex["name"], key=f"ex{idx}", use_container_width=True, on_click=load_example, args=(idx,))
+# Lógica para cargar ejemplos
+if "ejemplo" in st.session_state:
+    ej = st.session_state.ejemplo
+    if ej == 0:
+        st.session_state.obj_0, st.session_state.obj_1 = "3", "5"
+        st.session_state.a_0_0, st.session_state.a_0_1, st.session_state.s_0, st.session_state.r_0 = "1", "0", "<=", "4"
+        st.session_state.a_1_0, st.session_state.a_1_1, st.session_state.s_1, st.session_state.r_1 = "0", "2", "<=", "12"
+        st.session_state.a_2_0, st.session_state.a_2_1, st.session_state.s_2, st.session_state.r_2 = "3", "2", "<=", "18"
+    elif ej == 1:
+        st.session_state.obj_0, st.session_state.obj_1 = "2", "3"
+        st.session_state.a_0_0, st.session_state.a_0_1, st.session_state.s_0, st.session_state.r_0 = "1", "1", ">=", "4"
+        st.session_state.a_1_0, st.session_state.a_1_1, st.session_state.s_1, st.session_state.r_1 = "1", "3", ">=", "6"
+        st.session_state.a_2_0, st.session_state.a_2_1, st.session_state.s_2, st.session_state.r_2 = "2", "1", ">=", "5"
+    del st.session_state.ejemplo
+    st.rerun()
+
+
+# --- ÁREA PRINCIPAL ---
+st.markdown("## 📐 Solución Paso a Paso")
+
+if solve_btn:
+    try:
+        c = [parse_frac(v) for v in obj_vals]
+        A = [[parse_frac(v) for v in r["coefs"]] for r in constraints]
+        senses = [r["sense"] for r in constraints]
+        b = [parse_frac(r["rhs"]) for r in constraints]
+        res = solve_lp(c, A, senses, b, is_max)
+        st.session_state.result = res
+        st.session_state.c = c; st.session_state.A = A; st.session_state.s = senses; st.session_state.b = b
+        st.session_state.is_max = is_max
+    except Exception as e:
+        st.error(f"❌ Error: {e}")
+        st.session_state.pop("result", None)
+
+if "result" not in st.session_state:
+    st.info("👈 Configura tu problema en la barra lateral y presiona **Resolver**.")
+else:
+    res = st.session_state.result
+    c = st.session_state.c; A = st.session_state.A; senses = st.session_state.s; b = st.session_state.b
+    is_max = st.session_state.is_max
+
+    # --- RESULTADO FINAL ---
+    if res["status"] == "optimal":
+        st.success(f"✅ **Solución Óptima Encontrada**")
+        boxes = st.columns(len(res["x"]) + 1)
+        with boxes[0]:
+            st.markdown(f"<div class='metric-box'><small>Z {('Máx' if is_max else 'Mín')}</small><div class='v'>{html_frac(fstr(res['Z']))}</div></div>", unsafe_allow_html=True)
+        for i, v in enumerate(res["x"]):
+            with boxes[i+1]:
+                st.markdown(f"<div class='metric-box'><small>Variable x{i+1}</small><div class='v'>{html_frac(fstr(v))}</div></div>", unsafe_allow_html=True)
+    elif res["status"] == "infeasible": st.error("❌ Problema Infactible.")
+    elif res["status"] == "unbounded": st.warning("⚠️ Problema No Acotado.")
 
     st.divider()
-    solve_btn = st.button("▶ Resolver problema", type="primary", use_container_width=True)
-    current_hash = str(hash((tuple(obj_vals), is_max, tuple((tuple(c["coefs"]), c["sense"], c["rhs"]) for c in constraints))))
 
-with right:
-    if solve_btn:
-        try:
-            c = [parse_frac(v) for v in obj_vals]
-            A = [[parse_frac(v) for v in r["coefs"]] for r in constraints]
-            senses = [r["sense"] for r in constraints]
-            b = [parse_frac(r["rhs"]) for r in constraints]
-            res = solve_lp(c, A, senses, b, is_max)
-            st.session_state.result = res; st.session_state.result_c = c; st.session_state.result_A = A
-            st.session_state.result_s = senses; st.session_state.result_b = b; st.session_state.result_max = is_max
-            st.session_state.result_hash = current_hash
-        except Exception as e:
-            st.error(f"❌ Error al resolver: {e}"); st.session_state.pop("result", None)
+    # --- TABS ---
+    tab_g, tab_s, tab_df = st.tabs(["📊 Gráfico (2D)", "🔢 Simplex", "⚙️ Doble Fase"])
 
-    if "result" not in st.session_state:
-        st.info("Configura el problema a la izquierda y pulsa **▶ Resolver**.")
-    else:
-        if st.session_state.get("result_hash") != current_hash:
-            st.warning("⚠️ Los datos cambiaron desde la última solución. Pulsa **Resolver** para actualizar.")
+    # Función para renderizar tablas
+    def render_table_html(M, basis, r, names, total, enter=None, leave=None):
+        h = '<table class="custom-table"><thead><tr><th>VB</th>'
+        for nm in names: h += f'<th>{nm}</th>'
+        h += '<th>RHS</th></tr></thead><tbody>'
+        for i, row in enumerate(M):
+            h += f'<tr><td class="basis">{names[basis[i]]}</td>'
+            for j, v in enumerate(row):
+                cls = "rhs" if j == total else ""
+                if enter is not None and j == enter:
+                    cls += " enter-col"
+                    if i == leave: cls = "pivot"
+                h += f'<td class="{cls}">{html_frac(fstr(v))}</td>'
+            h += '</tr>'
+        h += '<tr class="z-row"><td class="basis">Cj−Zj</td>'
+        for j, v in enumerate(r):
+            cls = "rhs" if j == total else ""
+            if enter is not None and j == enter: cls += " enter-col"
+            h += f'<td class="{cls}">{html_frac(fstr(v))}</td>'
+        h += '</tr></tbody></table>'
+        return h
 
-        res = st.session_state.result; c = st.session_state.result_c; A = st.session_state.result_A
-        senses = st.session_state.result_s; b = st.session_state.result_b; is_max = st.session_state.result_max
+    def render_phase(phase, names, total):
+        out = ""
+        for k, stp in enumerate(phase["steps"]):
+            if stp["note"]:
+                out += f'<div class="explain-box"><h4>🏁 Fin de la Fase</h4><p>{stp["note"]}</p></div>'
+            else:
+                out += f'<div class="explain-box"><h4>Paso {k+1}: Iteración</h4>'
+                out += '<ul>'
+                out += f'<li>➡️ <b>Entra a la base:</b> La variable <code>{names[stp["enter"]]}</code> porque tiene el valor más positivo en Cj−Zj ({html_frac(fstr(stp["r"][stp["enter"]]))}).</li>'
+                out += f'<li>⬅️ <b>Sale de la base:</b> La variable <code>{names[stp["basis"][stp["leave"]]]}</code> porque su razón (RHS / columna entrante) es la mínima ({html_frac(fstr(stp["ratio"]))}).</li>'
+                out += f'<li>🎯 <b>Elemento Pivote:</b> Es el número <b>{html_frac(fstr(stp["pivot"]))}</b> (intersección).</li>'
+                out += '</ul></div>'
+            out += render_table_html(stp["M"], stp["basis"], stp["r"], names, total, stp["enter"], stp["leave"])
+        return out
 
-        if res["status"] == "optimal":
-            st.success(f"✅ **Solución óptima** — Z {('máx' if is_max else 'mín')} = {fstr(res['Z'])}")
-            boxes = st.columns(len(res["x"]) + 1)
-            with boxes[0]:
-                st.markdown(f"<div class='metric-box'><small>Z</small><div class='v'>{html_frac(fstr(res['Z']))}</div></div>", unsafe_allow_html=True)
-            for i, v in enumerate(res["x"]):
-                with boxes[i+1]:
-                    st.markdown(f"<div class='metric-box'><small>x{i+1}</small><div class='v'>{html_frac(fstr(v))}</div></div>", unsafe_allow_html=True)
-        elif res["status"] == "infeasible": st.error("❌ **Problema infactible.** Las restricciones no tienen región factible común.")
-        elif res["status"] == "unbounded": st.warning("⚠️ **Problema no acotado.** La función objetivo crece/decrece sin límite.")
+    names = res.get("varNames", []); total = res.get("totalCols", 0)
 
-        tab_g, tab_s, tab_df = st.tabs(["📊 Método Gráfico", "🔢 Simplex", "⚙️ Doble Fase"])
-
-        with tab_g:
-            if res["n"] != 2:
-                st.info("El método gráfico solo aplica a **2 variables**.")
-            elif res["status"] in ("optimal", "unbounded"):
-                g = solve_graphical(c, A, senses, b, is_max, res)
+    # --- PESTAÑA GRÁFICO ---
+    with tab_g:
+        if res["n"] != 2:
+            st.info("El método gráfico solo está disponible para 2 variables. Usa las otras pestañas.")
+        elif res["status"] in ("optimal", "unbounded"):
+            g = solve_graphical(c, A, senses, b, is_max, res)
+            col1, col2 = st.columns([1.5, 1])
+            with col1:
                 st.image(g["png"], use_column_width=True)
+            with col2:
+                st.markdown("### Vértices Evaluados")
                 if g["vertices"]:
-                    st.markdown("#### Vértices de la región factible")
-                    rows = [{"Vértice": "★ óptimo" if v["opt"] else f"V{i+1}", "x₁": round(v["x"], 4), "x₂": round(v["y"], 4), "Z": round(v["Z"], 4)} for i, v in enumerate(g["vertices"])]
-                    df = pd.DataFrame(rows)
-                    st.dataframe(df.style.apply(lambda row: ["background-color:#fef3c7;font-weight:800"]*4 if row["Vértice"] == "★ óptimo" else [""]*4, axis=1), use_container_width=True, hide_index=True)
+                    for i, v in enumerate(g["vertices"]):
+                        icon = "⭐" if v["opt"] else "📍"
+                        color = "green" if v["opt"] else "black"
+                        st.markdown(f"**{icon} Punto {i+1}:** ({round(v['x'], 2)}, {round(v['y'], 2)}) → **Z = {round(v['Z'], 2)}**")
 
-        def render_table_html(M, basis, r, names, total, enter=None, leave=None):
-            h = '<table style="border-collapse:collapse;margin:8px 0;font-size:.85rem;font-variant-numeric:tabular-nums"><thead><tr>'
-            h += '<th style="border:1px solid #cbd5e1;padding:6px 10px;background:#eef2ff;color:#3730a3">VB</th>'
-            for nm in names: h += f'<th style="border:1px solid #cbd5e1;padding:6px 10px;background:#eef2ff;color:#3730a3">{nm}</th>'
-            h += '<th style="border:1px solid #cbd5e1;padding:6px 10px;background:#dbeafe;color:#1e40af">RHS</th></tr></thead><tbody>'
-            for i, row in enumerate(M):
-                h += f'<tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;font-weight:700;color:#4f46e5;text-align:center">{names[basis[i]]}</td>'
-                for j, v in enumerate(row):
-                    style = "border:1px solid #cbd5e1;padding:6px 10px;text-align:center"
-                    if j == total: style += ";background:#eff6ff;font-weight:700"
-                    if enter is not None and j == enter and i == leave: style += ";background:#4f46e5;color:#fff;font-weight:800"
-                    elif enter is not None and j == enter: style += ";background:#ede9fe"
-                    h += f'<td style="{style}">{html_frac(fstr(v))}</td>'
-                h += '</tr>'
-            h += '<tr style="background:#fef9c3;font-weight:700;border-top:2px solid #facc15"><td style="border:1px solid #cbd5e1;padding:6px 10px;color:#4f46e5;text-align:center">Cj−Zj</td>'
-            for j, v in enumerate(r):
-                style = "border:1px solid #cbd5e1;padding:6px 10px;text-align:center"
-                if j == total: style += ";background:#eff6ff"
-                if enter is not None and j == enter: style += ";background:#ede9fe"
-                h += f'<td style="{style}">{html_frac(fstr(v))}</td>'
-            h += '</tr></tbody></table>'
-            return h
+    # --- PESTAÑA SIMPLEX ---
+    with tab_s:
+        sim_phases = [p for p in res["phases"] if "Fase 1" not in p["name"]]
+        if not sim_phases:
+            st.info("Este problema se resolvió completamente en la Doble Fase.")
+        else:
+            st.markdown(f"#### Método Simplex (Variables de holgura: s, exceso: e, artificiales: R)")
+            for ph in sim_phases:
+                st.markdown(render_phase(ph, names, total), unsafe_allow_html=True)
 
-        def render_phase(phase, names, total):
-            out = ""
-            for k, stp in enumerate(phase["steps"]):
-                if stp["note"]:
-                    out += f'<div class="explain"><b>Iteración {k+1}:</b> {stp["note"]}</div>'
-                else:
-                    out += f'<div class="explain"><b>Iteración {k+1}:</b><br>'
-                    out += f'• <b>Entra:</b> La variable <code>{names[stp["enter"]]}</code> porque tiene el mayor valor positivo en Cj−Zj ({html_frac(fstr(stp["r"][stp["enter"]]))}).<br>'
-                    out += f'• <b>Sale:</b> La variable <code>{names[stp["basis"][stp["leave"]]]}</code> porque tiene la razón mínima ({html_frac(fstr(stp["ratio"]))}).<br>'
-                    out += f'• <b>Pivote:</b> El elemento en la intersección es <b>{html_frac(fstr(stp["pivot"]))}</b>.</div>'
-                out += render_table_html(stp["M"], stp["basis"], stp["r"], names, total, stp["enter"], stp["leave"])
-            return out
-
-        names = res.get("varNames", []); total = res.get("totalCols", 0)
-
-        with tab_s:
-            sim_phases = [p for p in res["phases"] if "Fase 1" not in p["name"]]
-            if not sim_phases:
-                st.info("Este problema no requiere Simplex directo.")
-            else:
-                for ph in sim_phases:
-                    st.markdown(f"#### {ph['name']} · Estado: `{ph['status']}`")
-                    st.markdown(render_phase(ph, names, total), unsafe_allow_html=True)
-
-        with tab_df:
-            if len(res["phases"]) <= 1:
-                st.info("Este problema **no necesita Doble Fase** (no hay restricciones ≥ ni =).")
-            else:
-                for ph in res["phases"]:
-                    st.markdown(f"#### {ph['name']} · Estado: `{ph['status']}`")
-                    if "Fase 1" in ph["name"]:
-                        ok = ph["W"] == "0"
-                        color = "#10b981" if ok else "#ef4444"
-                        st.markdown(f'<div style="background:#fffbeb;border-left:4px solid {color};padding:10px 14px;border-radius:8px;margin:10px 0;color:#92400e;font-size:.87rem"><b>W = {html_frac(ph["W"])}</b>. {"✅ Factible." if ok else "❌ Infactible."}</div>', unsafe_allow_html=True)
-                    st.markdown(render_phase(ph, names, total), unsafe_allow_html=True)
+    # --- PESTAÑA DOBLE FASE ---
+    with tab_df:
+        if len(res["phases"]) <= 1:
+            st.info("Este problema no requiere Doble Fase (no hay restricciones ≥ ni =). Ve a la pestaña Simplex.")
+        else:
+            st.markdown("#### Método de las Dos Fases")
+            for ph in res["phases"]:
+                if "Fase 1" in ph["name"]:
+                    ok = ph["W"] == "0"
+                    msg = "✅ Como W = 0, hemos encontrado una solución factible inicial. Pasamos a la Fase 2." if ok else "❌ Como W ≠ 0, el problema es infactible."
+                    st.info(msg)
+                st.markdown(render_phase(ph, names, total), unsafe_allow_html=True)
