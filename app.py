@@ -1,4 +1,4 @@
-# app.py — PL Solver: Interfaz limpia, explicaciones sencillas y comprobación
+# app.py — PL Solver (Corregido para botones de ejemplo)
 import streamlit as st
 import pandas as pd
 import math
@@ -178,7 +178,26 @@ def verificar_solucion(x, A, senses, b, c, is_max):
     return checks, Z_calc
 
 # ═══════════════════════════════════════════════════════════════════
-# 4. INTERFAZ GRÁFICA
+# 4. FUNCIÓN PARA CARGAR EJEMPLOS (Evita el error de Streamlit)
+# ═══════════════════════════════════════════════════════════════════
+def cargar_ejemplo(id_ejemplo):
+    if id_ejemplo == 1:
+        st.session_state.obj_0, st.session_state.obj_1 = "3", "5"
+        for i, (c0, c1, s, r) in enumerate([("1","0","<=","4"), ("0","2","<=","12"), ("3","2","<=","18")]):
+            st.session_state[f"a_{i}_0"] = c0
+            st.session_state[f"a_{i}_1"] = c1
+            st.session_state[f"s_{i}"] = s
+            st.session_state[f"r_{i}"] = r
+    elif id_ejemplo == 2:
+        st.session_state.obj_0, st.session_state.obj_1 = "2", "3"
+        for i, (c0, c1, s, r) in enumerate([("1","1",">=","4"), ("1","3",">=","6"), ("2","1",">=","5")]):
+            st.session_state[f"a_{i}_0"] = c0
+            st.session_state[f"a_{i}_1"] = c1
+            st.session_state[f"s_{i}"] = s
+            st.session_state[f"r_{i}"] = r
+
+# ═══════════════════════════════════════════════════════════════════
+# 5. INTERFAZ GRÁFICA
 # ═══════════════════════════════════════════════════════════════════
 st.markdown("## 🧩 Solucionador de Programación Lineal")
 st.caption("Aprende paso a paso de forma sencilla.")
@@ -210,22 +229,9 @@ with st.sidebar:
     st.divider()
     solve_btn = st.button("▶ RESOLVER PASO A PASO", type="primary", use_container_width=True)
     
-    if st.button("🔄 Cargar Ejemplo 1", use_container_width=True):
-        st.session_state.ejemplo = 0; st.rerun()
-    if st.button("🔄 Cargar Ejemplo 2", use_container_width=True):
-        st.session_state.ejemplo = 1; st.rerun()
-
-if "ejemplo" in st.session_state:
-    ej = st.session_state.ejemplo
-    if ej == 0:
-        st.session_state.obj_0, st.session_state.obj_1 = "3", "5"
-        for i, (c0, c1, s, r) in enumerate([("1","0","<=","4"), ("0","2","<=","12"), ("3","2","<=","18")]):
-            st.session_state[f"a_{i}_0"], st.session_state[f"a_{i}_1"], st.session_state[f"s_{i}"], st.session_state[f"r_{i}"] = c0, c1, s, r
-    elif ej == 1:
-        st.session_state.obj_0, st.session_state.obj_1 = "2", "3"
-        for i, (c0, c1, s, r) in enumerate([("1","1",">=","4"), ("1","3",">=","6"), ("2","1",">=","5")]):
-            st.session_state[f"a_{i}_0"], st.session_state[f"a_{i}_1"], st.session_state[f"s_{i}"], st.session_state[f"r_{i}"] = c0, c1, s, r
-    del st.session_state.ejemplo; st.rerun()
+    # AQUÍ ESTÁ LA MAGIA: Usamos on_click para cambiar los datos sin romper la app
+    st.button("🔄 Cargar Ejemplo 1", use_container_width=True, on_click=cargar_ejemplo, args=(1,))
+    st.button("🔄 Cargar Ejemplo 2", use_container_width=True, on_click=cargar_ejemplo, args=(2,))
 
 # --- ÁREA PRINCIPAL ---
 if solve_btn:
@@ -255,17 +261,12 @@ else:
 
         def style_cell(x):
             styles = pd.DataFrame('', index=df.index, columns=df.columns)
-            # Columna RHS
             styles.iloc[:, -1] = 'background-color: #dcfce7; color: #166534; font-weight: bold;'
-            # Fila Cj-Zj
             styles.iloc[-1, :] = 'background-color: #fef08a; color: #854d0e; font-weight: bold; border-top: 2px solid #eab308;'
-            # Columna Base
             styles.iloc[:, 0] = 'background-color: #f1f5f9; color: #334155; font-weight: bold;'
             
             if enter is not None:
-                # Columna entrante
                 styles.iloc[:, enter + 1] = 'background-color: #f3e8ff;'
-                # Pivote
                 if leave is not None:
                     styles.iloc[leave, enter + 1] = 'background-color: #4f46e5; color: white; font-weight: bold;'
             return styles
@@ -278,7 +279,6 @@ else:
             if stp["note"]:
                 out.append(st.info(f"🏁 **Fin:** {stp['note']}"))
             else:
-                # EXPLICACIÓN SENCILLA
                 txt = f"""
                 **Paso {k+1}:**
                 1. 👀 Mira la fila de abajo (Cj−Zj) y busca el número positivo más grande. Ese nos dice qué variable entra. Aquí es **`{names[stp['enter']]}`** (porque tiene {fstr(stp['r'][stp['enter']])}).
@@ -291,7 +291,6 @@ else:
 
     names = res.get("varNames", []); total = res.get("totalCols", 0)
 
-    # PESTAÑAS
     tab_res, tab_simplex, tab_dob, tab_verif = st.tabs(["🏆 Resultado", "🔢 Simplex", "⚙️ Doble Fase", "✅ Comprobación"])
 
     with tab_res:
